@@ -1,0 +1,587 @@
+% ============================================================
+%  When the Machine Stops Looking
+%  Autonomous Replenishment, Censored Demand, and the
+%  Vanishing Value of a Human Filter
+%
+%  TERMINOLOGY LOCK (one term per object, used everywhere):
+%    - "autonomous policy"      : the unattended machine learner
+%    - "censoring-aware"        : de-censors via Kaplan-Meier
+%    - "contamination-blind"    : cannot flag corrupted records
+%    - "human filter"           : domain expert who screens data
+%    - "observable boundary"    : largest order recently placed,
+%                                 above which demand is unidentified
+%    - "biased equilibrium"     : attracting order level q_infty < q*
+%    - "exposure law"           : d[service]/d[eps] = -(1-beta)
+%    - "correction-log alarm"   : minimal filter, fires on logged correction days
+%
+%  LOCAL STYLE (enforced throughout):
+%    - no em dashes, no semicolons, no emphasis font
+%    - unpack definitions with "that is" / "namely"
+%    - lead with the managerial question, keep the benchmark visible
+%    - after each result: math statement, mechanism, managerial meaning,
+%      failure mode
+% ============================================================
+
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{mdframed}
+\usepackage{booktabs}
+\usepackage{titlesec}
+\usepackage[round]{natbib}
+\bibliographystyle{plainnat}
+\usepackage[hidelinks]{hyperref}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+
+\titlespacing*{\section}{0pt}{1.4em}{0.6em}
+\setlength{\parskip}{0.35em}
+\linespread{1.08}
+
+\title{\vspace{-2.5em}\textbf{When the Machine Stops Looking:\\
+Autonomous Replenishment, Censored Demand,\\
+and the Vanishing Value of a Human Filter}}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-3em}
+
+\begin{abstract}
+\noindent
+Retailers increasingly delegate replenishment to algorithms that learn from
+sales with no human in between. A learner can correct for demand censoring on its
+own when stockouts are recorded on clean days, but it cannot flag contaminated
+records without domain knowledge or access to the returns-and-corrections log.
+We study a censoring-aware but contamination-blind learner in a repeated
+newsvendor in which a fraction of high-demand events is masked by returns or
+corrections booked to those periods, making them appear as low-demand days.
+The order and the data then form a closed
+loop. We show that the loop drives the order to a unique equilibrium below the
+optimum, that no tipping point arises along the way, and that the marginal service
+loss per unit of contamination equals the item's stockout frequency $1-\beta$. The
+items a firm automates first, namely low-margin, high-volume, thin-service items,
+degrade fastest. The loss accrues every period, so the value of a human who
+screens the data grows with the planning horizon and is concentrated in screening
+the data rather than in overriding orders, which matches the field evidence on
+human discretion. A minimal filter that audits only the returns-and-corrections log
+recovers nearly first-best service. We validate the equilibrium, the exposure law,
+and the filter on a calibrated instance.
+\end{abstract}
+
+\section{Introduction}
+
+% P1 Context. Realistic regime first. Names every decision object.
+Large retailers now let software place replenishment orders with no buyer in
+between. The system reads recent sales, updates its view of demand, and sets the
+order quantity $q_t$ for each of hundreds of thousands of items, night after
+night. A buyer used to do two things that the order quantity alone does not
+record. She read a sold-out day as understating true demand, and she set aside the
+records she judged unreliable, that is, the week a promotion, a returns batch, or
+a feed error distorted the numbers. The first correction is mechanical when
+labels are clean. The firm knows when an item stocked out, so a machine can make
+it. The second correction needs to know the business, and it matters most when
+returns, phantom inventory, or feed errors mask a stockout in the feed. This paper
+asks what the firm loses when the second correction goes away, and shows that for
+a recognizable class of items the loss is not a steady efficiency tax but a
+service level that drifts down and settles well below target.
+
+% P2 Trade-off. One concrete numeric vignette, both extremes, neither works.
+Consider an item the firm wants stocked to a fifty percent service level, so that
+the cost-minimizing order is the median of demand, namely $100$ units. Suppose
+that on a tenth of the high-demand events, a returns batch or data correction is
+booked to the same period, reducing the recorded demand so that what should be
+recorded as a stockout instead appears as an ordinary low-sales day, say around
+$40$ units on average. A censoring-aware learner corrects for the stockouts it can
+see, yet it reads these masked days at face value as evidence that demand is weak,
+so it trims the order. The lower order produces more high-demand events, more of
+which can be masked by coincidental returns or corrections, and the order keeps
+drifting down until it settles near $96$ units at a realized service level of
+forty-four percent. Raise the masking rate to thirty percent of high-demand days
+and the same item settles near $83$ units at twenty-nine percent service, and a
+low-service item that started at thirty percent settles in single digits. The two
+clean alternatives both fail. Full automation is cheap per decision and reacts
+overnight, but it walks the item down. Full human review corrects every record by
+checking the returns log and removing the booked offsets, but it spends scarce
+attention on every item the firm carries, and the field evidence is that letting
+buyers also override the order itself reduces profit \citep{kesavan2020override}.
+The question is where between these extremes the firm should sit, and the answer
+turns on how much of the high-demand events are masked by returns and on how
+exposed the item is to the loop.
+
+% P3 Difficulty. Why hard on its own terms. No answer preview.
+The difficulty is that the order and the data form a closed loop. Because
+stockouts are recorded on clean days, one might expect a censoring-aware learner
+to be safe, and on clean records it is. The catch is that the de-censoring
+correction trusts the stockout labels, and contamination masks exactly those
+labels. A masked stockout enters the learner's data as a genuine low-demand day,
+lowering the order, and the lower order raises the share of days that stock out
+and so can be masked. The learner cannot separate a genuinely weak demand signal
+from a corrupted one, because the evidence that would separate them, namely the
+demand it failed to serve, never appears in the feed. Saying where this loop
+settles, and how fast it descends, means tracking a decision-dependent estimator
+together with the order it feeds, and neither piece can be analyzed in isolation.
+
+% P4 Research Question. Closest prior work + restrictive assumption + interrogative
+% question + method shift. No answer preview.
+The closest prior work studies learning under censoring on clean data.
+\citet{besbes2013implications} isolate the regret cost of censoring,
+\citet{lariviere1999stalking} show that ordering above the myopic level keeps the
+upper tail visible and escapes the censoring trap, and \citet{ding2024feature}
+build censoring-aware learners that attain vanishing regret with features.
+\citet{hssaine2024datadriven} make the observable boundary central, but in an
+offline setting with uncorrupted records. \citet{mersereau2015censored} show that
+inventory record inaccuracy compounds the downward bias already present under
+censoring. Each of these assumes the records are clean, or treats inaccuracy
+separately from the learning loop, which is the one correction a machine cannot
+make on its own, because contamination, unlike censoring, is not self-revealing
+in the demand feed. So the question this paper asks is the following. When a
+censoring-aware but contamination-blind learner runs unattended, does data
+contamination wash out as noise, or does it compound through the censoring loop
+into a self-reinforcing decline, and how little human screening of the data is
+enough to stop it? Answering it requires coupling a contamination model with an
+endogenous observable boundary inside a repeated newsvendor, and then pricing a
+scarce human filter against the loop.
+
+% P5 Managerial answer. Plain language, no theorem sentences, points forward.
+Contamination does not wash out. It compounds. The order descends to a single
+equilibrium below the target and stays there, and the descent is smooth, so there
+is no warning tipping point to watch for. What governs the damage is one number.
+The service the firm loses per unit of contamination equals the item's stockout
+frequency, namely one minus its target service level. Low-service, thin-margin,
+high-volume items run with high stockout frequencies, so they bleed service
+fastest, and they are the items a firm automates first. Because the shortfall
+repeats every period, the cost of leaving the loop unattended grows with the
+planning horizon rather than washing out, and the value of a human sits entirely
+in screening the data rather than in overriding the order, which is why
+input-level human corrections help in the field while order overrides do not
+\citep{kesavan2025judgmental}. The remedy is cheap and pointed. Masked stockouts
+leave a trace in the returns-and-corrections log, so a human called in only on
+logged correction days audits exactly the records at fault, and because the cost
+penalty grows with the square of the contamination, auditing even half of those
+days removes most of it while auditing all of them restores the target. The
+contributions below make each of these statements precise and validate them on a
+calibrated instance.
+
+% Contributions block. Formal verbs, explicit orders, result references.
+\paragraph{Contributions.}
+\begin{enumerate}[leftmargin=1.5em,itemsep=0.35em,label=\textbf{\arabic*.}]
+  \item \textbf{Model.} We formulate the repeated newsvendor as a closed loop in
+  which a censoring-aware but contamination-blind learner sets orders, demand is
+  censored at the order, and a fraction $\epsilon$ of true stockouts is masked in
+  the feed as low-sales days drawn from a downward source $G$, following the
+  returns-and-inventory-inaccuracy patterns documented by
+  \citet{mersereau2015censored,dehoratius2008retail}. Lemma~\ref{lem:mf} derives
+  the population estimate the learner converges to, namely
+  $\widehat F_q(x)=F(x)+\epsilon(1-F(q))G(x)$, in which the contamination term
+  carries the stockout frequency $1-F(q)$ and so depends on the order.
+
+  \item \textbf{Main result, with a negative result inside it.}
+  Theorem~\ref{thm:main} is the spine of the paper. Part~(i) proves that the
+  projected Robbins--Monro learner converges almost surely to a unique equilibrium
+  $q_\infty(\epsilon,\beta)<q^\star$ and that the order map is monotone, so no
+  tipping point or bistable collapse can arise from this contamination. Part~(ii)
+  is the centerpiece, the exposure law
+  $\mathrm{d}\,[\text{service}]/\mathrm{d}\epsilon=-(1-\beta)G(q^\star)$, equal to
+  $-(1-\beta)$ in the relevant range, so degradation is steepest for low-service
+  items. Part~(iii) shows long-run average cost exceeds the optimum by
+  $\Theta\!\big((b+h)\,\epsilon^2(1-\beta)^2/f(q^\star)\big)$.
+
+  \item \textbf{Prescription.} Because that penalty is quadratic in contamination,
+  a correction-log alarm that audits a fraction $\varphi$ of logged correction days
+  removes more than three quarters of it at half coverage and restores the optimum
+  at full coverage (Theorem~\ref{thm:main}(iii), Table~\ref{tab:sim}). Oversight
+  should be triggered by the returns and corrections log rather than by stockout
+  flags, and its return is concentrated at the data-screening level rather than
+  the order-override level, which rationalizes the opposing signs of the two
+  field experiments on human discretion
+  \citep{kesavan2025judgmental,kesavan2020override}.
+
+  \item \textbf{Numerical evidence.} On a calibrated instance with normal demand
+  we confirm the unique equilibrium, the exact exposure law, and the simulated
+  order path against the mean-field prediction across critical ratios,
+  contamination levels, and horizons, and we report the items most exposed to the
+  loop (Section~\ref{sec:num}).
+\end{enumerate}
+
+% P6 Roadmap.
+Section~\ref{sec:lit} places the result in the literature. Section~\ref{sec:model}
+states the model and the learner. Section~\ref{sec:law} derives the equilibrium,
+the exposure law, and the value of the filter. Section~\ref{sec:num} reports the
+numerical study.
+
+\section{Related Literature}\label{sec:lit}
+
+Our work draws on six strands, and we keep to the top journals in each.
+
+\paragraph{Information stalking and the exploration trap.}
+A censored learner that only exploits under-orders and so never observes the upper
+tail, converging to a level below the optimum
+\citep{lariviere1999stalking,ding2002censored}. The known remedy is to order above
+the myopic level to acquire information. Our equilibrium looks similar but is
+driven by contamination rather than by myopia, and we show that the remedy of
+de-censoring does not remove it, because masked stockouts suppress the labels the
+de-censoring relies on.
+
+\paragraph{Adaptive learning and regret under censoring.}
+A mature line designs censoring-aware policies with vanishing regret, through
+distribution-free stochastic-gradient learning
+\citep{godfrey2001adaptive,huh2009nonparametric}, the Kaplan--Meier estimator
+\citep{huh2011adaptive}, the isolation of the regret cost of censoring
+\citep{besbes2013implications}, inference for the resulting policies
+\citep{ban2020confidence}, and the recent offline analysis of
+\citet{hssaine2024datadriven} that makes the observable boundary explicit. We
+adopt this regret language and study the realistic learner that is censoring-aware
+yet contamination-blind.
+
+\paragraph{Spiral-down and decision-dependent demand.}
+\citet{cooper2006spiral} formalize the loop in which censored observations feed
+forecasts that lower controls that further censor observations. Our descent is a
+structured instance of performative prediction, namely the setting where deploying
+a model shifts the distribution it then faces \citep{perdomo2020performative}. We
+give the operations form, derive its equilibrium in closed form, and tie it to
+oversight design.
+
+\paragraph{Data-driven, machine learning, and reinforcement learning newsvendor.}
+The feature-based data-driven newsvendor \citep{ban2019bigdata}, prescriptive
+analytics \citep{bertsimas2020predictive,elmachtoub2022smart}, censoring-aware
+feature-based control \citep{ding2024feature}, learning under shifting demand
+\citep{chen2021shifting}, and deep reinforcement learning for lost-sales inventory
+\citep{gijsbrechts2022deeprl} all engineer performance under censoring. Our point
+is orthogonal. Even a well-engineered censoring-aware learner is driven below
+target by masked stockouts absent a human filter.
+
+\paragraph{Inventory record inaccuracy and masked stockouts.}
+\citet{dehoratius2008empirical,dehoratius2008retail} document that retail systems
+often carry phantom inventory, that is, positive on-hand records when the shelf is
+empty. \citet{mersereau2015censored,chen2015visibility} show that this inaccuracy
+compounds the downward bias already present under demand censoring. We route the
+same force through a repeated learning loop in which the identification boundary is
+the order itself, and tie the remedy to the returns-and-corrections log that records
+when offsets are booked \citep{kesavan2025judgmental}.
+
+\paragraph{Robust and distribution-free inventory.}
+The contamination model is in the spirit of Huber's
+\citeyearpar{huber1964robust} $\epsilon$-contamination, the classical robustness
+device, and connects to distribution-free inventory in the tradition of
+\citet{scarf1958minmax}. We are not aware of prior work routing contamination
+through a censored, repeated inventory loop in which the identification boundary is
+itself a decision.
+
+\paragraph{Human-in-the-loop and algorithm aversion.}
+Field experiments show that human override helps at the data-input level and hurts
+at the decision level \citep{kesavan2025judgmental,kesavan2020override}, a
+behavioral literature documents algorithm aversion and how modest control over the
+algorithm restores adoption \citep{dietvorst2018overcoming}, and related work asks
+how to elicit and combine human judgment \citep{ibrahim2021eliciting}. We give a
+model in which the human's value is precisely as a data filter, which rations the
+scarce attention these papers measure.
+
+\section{Model and the Autonomous Learner}\label{sec:model}
+
+Demand $D_t$ is drawn i.i.d.\ from a continuous, strictly increasing distribution
+$F$ with density $f$. The newsvendor underage and overage costs are $b$ and $h$,
+the critical ratio is $\beta=b/(b+h)$, and the cost-minimizing order is the
+$\beta$-quantile $q^\star=F^{-1}(\beta)$. Each period the firm orders $q_t$ and
+observes sales and a stockout label.
+
+\paragraph{Contamination through returns and corrections.}
+In each period, returns and data corrections are logged as an operational byproduct,
+independent of demand. With intensity $\epsilon$, a true high-demand event (demand
+$D_t \ge q_t$ that should be recorded as a stockout) coincides with a return or
+correction being booked to that period, reducing the recorded demand and masking
+the stockout. Specifically, the recorded demand becomes a value drawn from a
+downward source $G$, where $G$ is stochastically dominated by $F$ and represents
+the magnitude of typical returns or corrections. The recorded value and the
+operative stockout status are now decoupled, and the stockout label follows the
+recorded value rather than the true demand. This is the one error a machine cannot
+correct on its own without domain knowledge or access to the returns and corrections
+log, which contains the ground truth for when this offset occurred.
+
+\paragraph{Recorded data.}
+Work on a probability space $(\Omega,\mathcal F,\mathbb P)$ with a filtration
+$(\mathcal F_t)$, and let the order $q_t$ be $\mathcal F_{t-1}$-measurable. In period
+$t$, given $q_t$, nature draws the demand $D_t\sim F$, a contamination coin
+$U_t\sim\mathrm{Unif}[0,1]$, and if contamination occurs, a correction value $D_t^G\sim G$,
+mutually independent and independent of $\mathcal F_{t-1}$. The recorded outcome is one of
+three. If $D_t<q_t$ the day is served and recorded at value $D_t$. If $D_t\ge q_t$
+and $U_t>\epsilon$ the day is a genuine high-demand event, recorded as censored at $q_t$
+(stockout). If $D_t\ge q_t$ and $U_t\le\epsilon$ a correction is booked for that period,
+reducing recorded demand to $D_t^G$, which enters the learner's data as an uncensored
+low-sales observation. The returns-and-corrections log records which periods experienced
+a booking; call this a \textit{logged correction day}. Let
+$g_t=\mathbf 1\{\text{recorded demand}<q_t\}$ denote the recorded served-indicator,
+which is $\mathcal F_t$-measurable.
+
+\paragraph{The learner and the audit.}
+The autonomous policy is censoring-aware and contamination-blind. It uses the
+stockout labels, so it scores a genuine high-demand event as demand above the order,
+but it cannot tell a masked high-demand day from a true low-sales day without
+access to the returns-and-corrections log. We analyze the canonical adaptive form,
+a projected Robbins--Monro recursion that drives the recorded served-rate to the
+target $\beta$,
+\begin{equation}\label{eq:rm}
+  q_{t+1}=\Pi_{[\underline q,\overline q]}\!\big(q_t-a_t\,(g_t-\beta)\big),
+  \qquad a_t>0,\quad \textstyle\sum_t a_t=\infty,\quad \sum_t a_t^2<\infty,
+\end{equation}
+where $\Pi$ is the projection onto a compact interval $[\underline q,\overline q]$
+that contains $q^\star$ in its interior. The estimate-then-optimize learner that
+de-censors by the Kaplan--Meier estimator over a rolling window and orders the
+$\beta$-quantile of its estimate is an alternative with the same mean field, by
+Lemma~\ref{lem:mf}, and is the version we simulate in Section~\ref{sec:num}. A human
+filter operates at the data level by consulting the returns-and-corrections log and,
+for a fraction $\varphi$ of the logged corrections, undoing the recorded offset to
+recover the true demand signal and feeding it back into the learner's data stream.
+This data-level human intervention is shown to improve profit in the field, in
+contrast to order-level overrides which reduce it \citep{kesavan2025judgmental}.
+
+\section{The Contamination Spiral and the Exposure Law}\label{sec:law}
+
+We now ask where the loop settles, how fast it descends, and what restores it,
+keeping the clean benchmark $q^\star$ in view throughout. The first step records
+what the learner perceives at a fixed order and reduces the recursion to a
+one-dimensional fixed-point problem.
+
+\begin{lemma}[Perceived demand and the mean field]\label{lem:mf}
+Fix an order $q\in[\underline q,\overline q]$.
+\textup{(a)} Operating persistently at $q$, the estimate-then-optimize learner's
+windowed estimate converges almost surely and uniformly to
+\begin{equation}\label{eq:Fhat}
+  \widehat F_q(x)=F(x)+\epsilon\,(1-F(q))\,G(x),\qquad x\le q .
+\end{equation}
+\textup{(b)} The recorded served-indicator satisfies
+$\mathbb E[g_t\mid q_t=q]=\widehat F_q(q)=H(q)$, where
+\begin{equation}\label{eq:H}
+  H(q)\;:=\;F(q)+\epsilon\,(1-F(q))\,G(q).
+\end{equation}
+\end{lemma}
+
+\noindent\textit{Proof.}
+(a) At the fixed level $q$ the recorded values are i.i.d., and with a single
+censoring level the Kaplan--Meier estimator equals the empirical distribution on
+$[0,q]$ with the censored mass placed above $q$. The uncensored records at or below
+$x<q$ are the genuine demands below $x$, of probability $F(x)$, together with the
+masked stockouts whose correction value falls below $x$, of probability
+$\epsilon(1-F(q))G(x)$. Glivenko--Cantelli gives almost sure uniform convergence to
+their sum \eqref{eq:Fhat}. (b) The indicator $g_t$ equals one on exactly the served
+and masked-below days, so
+$\mathbb E[g_t\mid q_t=q]=F(q)+\epsilon(1-F(q))G(q)=\widehat F_q(q)$. \hfill$\square$
+
+The genuine uncensored days below $x$ contribute $F(x)$. The masked stockout
+days contribute the second term, in which $\epsilon(1-F(q))$ is the share of days
+that stock out and are masked in the feed. The factor $1-F(q)$ is the stockout
+frequency,
+and it ties the size of the contamination to the order itself. That single coupling
+is what turns a static bias into a loop, because the equilibrium order solves
+\begin{equation}\label{eq:fp}
+  H(q)=\beta .
+\end{equation}
+The whole paper rests on the following result, which reads the loop in three parts,
+namely where it goes, how much it costs at the margin, and how cheaply a human
+reverses it.
+
+\begin{mdframed}[linewidth=0.6pt,roundcorner=3pt,backgroundcolor=black!2]
+\begin{theorem}[Contamination spiral and the exposure law]\label{thm:main}
+Let $F$ be continuous and strictly increasing with $q^\star=F^{-1}(\beta)$,
+$\beta\in(0,1)$, and let $G$ be stochastically dominated by $F$. Under the
+censoring-aware, contamination-blind learner of Section~\ref{sec:model} with
+contamination intensity $\epsilon$, the following hold.
+\begin{enumerate}[label=\textup{(\roman*)},leftmargin=2em,itemsep=0.3em]
+  \item \textup{(Spiral to a unique equilibrium, no tipping point)} The map $H$ is
+  strictly increasing, so \eqref{eq:fp} has a unique root $q_\infty(\epsilon,\beta)$,
+  and the projected recursion \eqref{eq:rm} converges to it almost surely from any
+  start in $[\underline q,\overline q]$. The root satisfies $q_\infty=q^\star$ at
+  $\epsilon=0$ and $q_\infty<q^\star$, strictly decreasing in $\epsilon$, for
+  $\epsilon>0$. No second equilibrium or tipping point exists.
+
+  \item \textup{(Exposure law)} The equilibrium service level $F(q_\infty)$ is
+  smooth and strictly decreasing in $\epsilon$, with
+  \begin{equation}\label{eq:law}
+    \frac{\mathrm{d}\,F(q_\infty)}{\mathrm{d}\epsilon}\bigg|_{\epsilon=0}
+    =-(1-\beta)\,G(q^\star),
+  \end{equation}
+  which equals $-(1-\beta)$ when the contamination lies below $q^\star$. The
+  marginal service loss is the item's stockout frequency.
+
+  \item \textup{(Cost and oversight)} Long-run average cost exceeds the optimum by
+  \begin{equation}\label{eq:cost}
+    C(q_\infty)-C(q^\star)
+    =\tfrac12(b+h)f(q^\star)\,(q^\star-q_\infty)^2+o\big((q^\star-q_\infty)^2\big)
+    =\Theta\!\Big(\tfrac{(b+h)\,\epsilon^2(1-\beta)^2}{f(q^\star)}\Big).
+  \end{equation}
+  A correction-log alarm that audits a fraction $\varphi$ of logged correction
+  days corrects the masked records at that rate, reducing the effective
+  contamination to $\epsilon(1-\varphi)$ and the cost penalty to a
+  $(1-\varphi)^2$ fraction, so half coverage removes three quarters of the penalty
+  and full coverage restores $q^\star$. The value of oversight is largest for
+  low-service items.
+\end{enumerate}
+\end{theorem}
+\end{mdframed}
+
+\noindent\textit{Proof of Theorem~\ref{thm:main}.}
+Part (i), structure. Differentiating \eqref{eq:H},
+$H'(q)=f(q)\,(1-\epsilon G(q))+\epsilon\,(1-F(q))\,g(q)$, and both terms are
+nonnegative because $\epsilon G(q)\le1$, with the first strictly positive, so $H$
+is strictly increasing and the root of \eqref{eq:fp} is unique. The added term in
+\eqref{eq:H} is positive for $\epsilon>0$, so $F(q_\infty)<\beta$, that is
+$q_\infty<q^\star$, and monotonicity in $\epsilon$ follows from the implicit
+function theorem.
+
+Part (i), convergence. Write $h(q)=\beta-H(q)$. By Lemma~\ref{lem:mf}(b) the
+recursion \eqref{eq:rm} is $q_{t+1}=\Pi_{[\underline q,\overline q]}(q_t+a_t h(q_t)
++a_t M_t)$ with $M_t=\mathbb E[g_t\mid\mathcal F_{t-1}]-g_t$, a martingale-difference
+sequence with $|M_t|\le1$. Strict monotonicity of $H$ gives the Lyapunov sign
+condition $(q-q_\infty)h(q)<0$ for every $q\ne q_\infty$ in
+$[\underline q,\overline q]$. Set $V_t=(q_t-q_\infty)^2$. Since $q_\infty$ lies in
+the interior and $\Pi$ is nonexpansive with $\Pi(q_\infty)=q_\infty$,
+\[
+  \mathbb E[V_{t+1}\mid\mathcal F_{t-1}]
+  \;\le\; V_t+2a_t\,(q_t-q_\infty)\,h(q_t)+a_t^2\,\mathbb E[M_t^2\mid\mathcal F_{t-1}]
+  \;\le\; V_t-2a_t\,\Delta_t+a_t^2,
+\]
+where $\Delta_t=(q_t-q_\infty)(H(q_t)-\beta)\ge0$. As $\sum_t a_t^2<\infty$, the
+Robbins--Siegmund nonnegative almost-supermartingale theorem
+\citep{robbins1971convergence} implies that $V_t$ converges almost surely and
+$\sum_t a_t\Delta_t<\infty$ almost surely. Were $|q_t-q_\infty|\ge\delta$ for all
+large $t$ on a positive-probability set, then $\Delta_t$ would be bounded below by
+$\inf_{\delta\le|q-q_\infty|}\Delta(q)>0$ there, forcing $\sum_t a_t\Delta_t=\infty$
+because $\sum_t a_t=\infty$, a contradiction. Hence $\liminf_t|q_t-q_\infty|=0$, and
+since $V_t$ converges, $q_t\to q_\infty$ almost surely
+\citep{robbins1951stochastic,kushner2003stochastic}. This holds from any start in
+$[\underline q,\overline q]$, so there is no second equilibrium and no tipping
+point.
+
+Part (ii). Differentiate $H(q_\infty(\epsilon))=\beta$ in $\epsilon$ at
+$\epsilon=0$, where $q_\infty=q^\star$ and $F(q^\star)=\beta$. The cross terms in
+$\epsilon$ vanish, leaving $f(q^\star)\,q_\infty'(0)+(1-\beta)\,G(q^\star)=0$, and
+multiplying by $f(q^\star)$ gives \eqref{eq:law}.
+Part (iii). Since $C'(q)=(b+h)F(q)-b$, we have $C'(q^\star)=0$ and
+$C''(q^\star)=(b+h)f(q^\star)$, which gives the quadratic expansion. Substituting
+$q^\star-q_\infty=\epsilon(1-\beta)G(q^\star)/f(q^\star)+o(\epsilon)$ from
+\eqref{eq:law} gives the order term. A correction-log alarm reviews a fraction
+$\varphi$ of logged correction days. Each masked stockout appears in that log, so
+an audited day is corrected with probability $\varphi$, the effective intensity is
+$\epsilon(1-\varphi)$, and the cost, quadratic in intensity by \eqref{eq:cost},
+scales as $(1-\varphi)^2$. \hfill$\square$
+
+The same structure pins down the rate, and with it the cumulative cost behind the
+$\Theta(T)$ claim. The step size enters through the local slope
+$\lambda:=H'(q_\infty)>0$ established in part (i).
+
+\begin{lemma}[Rate]\label{lem:rate}
+Under \eqref{eq:rm} with $a_t=a/t$ and $2a\lambda>1$,
+$\mathbb E[(q_t-q_\infty)^2]=O(1/t)$ and $\bigl|\mathbb E[q_t-q_\infty]\bigr|=O(1/t)$.
+\end{lemma}
+
+\noindent This is the classical stochastic-approximation rate for a recursion whose
+mean field is locally linear and strictly stable at its root
+\citep{kushner2003stochastic}. It controls the transient and isolates the
+contamination bias $q^\star-q_\infty$ as the term that persists.
+
+\begin{lemma}[Cumulative regret]\label{lem:regret}
+Let $R_T=\sum_{t=1}^{T}\bigl(\mathbb E[C(q_t)]-C(q^\star)\bigr)$ under the step size
+of Lemma~\ref{lem:rate}. Then
+\[
+  R_T=T\,\bigl(C(q_\infty)-C(q^\star)\bigr)+O(\log T)
+     =\Theta\!\Big(\tfrac{(b+h)\,\epsilon^2(1-\beta)^2}{f(q^\star)}\;T\Big).
+\]
+\end{lemma}
+
+\noindent\textit{Proof.}
+A second-order expansion gives
+$C(q_t)-C(q_\infty)=C'(q_\infty)(q_t-q_\infty)+\tfrac12C''(\zeta_t)(q_t-q_\infty)^2$
+for some $\zeta_t$ between $q_t$ and $q_\infty$, with $C''$ bounded on
+$[\underline q,\overline q]$. Taking expectations and applying Lemma~\ref{lem:rate}
+to both terms gives $\mathbb E[C(q_t)]-C(q_\infty)=O(1/t)$, which sums to
+$O(\log T)$. Adding $T\,(C(q_\infty)-C(q^\star))$ and substituting the constant
+order from \eqref{eq:cost} gives the claim. \hfill$\square$
+
+Theorem~\ref{thm:main} captures an item run unattended on censored, contaminated
+data, and the mechanism is the factor $1-F(q)$ in \eqref{eq:Fhat}. The learner
+cannot separate a genuinely weak demand signal from a corrupted one, its
+censoring-aware response to an apparently weak signal is to order less, and
+ordering less raises the stockout frequency that feeds the next period more
+corrupted records. Two readings follow. First, the descent has no warning sign,
+because $H$ is monotone and there is no second equilibrium, so a manager watching
+for a sudden break will see none and the shortfall arrives instead as a slow,
+permanent erosion. Second, the marginal damage is the stockout frequency $1-\beta$,
+so a firm can rank its catalogue by target service level with data already in hand
+and find that the cheap, fast-moving, thin-service items it automates first are
+exactly the items the loop punishes hardest. The failure mode to remember is that
+de-censoring does not protect the item and a better optimizer does not help,
+because the data are the problem. The complementary priority is a human who screens
+logged correction days where the masking enters, and because the penalty is
+quadratic in contamination, auditing even half of those days removes most of it.
+
+\section{Numerical Study}\label{sec:num}
+
+We calibrate demand as $F=\mathcal N(100,30)$ and the contamination source as
+$G=\mathcal N(40,10)$, that is returns batches booked at about $40$ units. We
+simulate the learner with $N=200$ demand draws per period, a rolling window of
+$W=60$ periods, horizon $T=4000$, and a generous start of $q_0=160$, and we add a
+correction-log alarm that audits a fraction $\varphi$ of logged correction days.
+Table~\ref{tab:sim} reports the long-run order against the mean-field equilibrium,
+the realized service, the cost gap above the optimum, and the audit load, namely
+the fraction of item-days the human inspects.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Simulated learner and correction-log filter. Demand $\mathcal N(100,30)$,
+contamination $G=\mathcal N(40,10)$ on masked stockout days, $\epsilon=0.30$ for the
+contaminated rows. $\varphi$ is the fraction of logged correction days audited. The
+optimum is $q^\star=84.3$ for $\beta=0.30$ and $q^\star=115.7$ for $\beta=0.70$.
+Cost gap is percent above optimal newsvendor cost. Audit load is the fraction of
+item-days inspected. Standard deviations are over the final $500$ periods.}
+\label{tab:sim}
+\begin{tabular}{c c c c c c c c}
+\toprule
+$\beta$ & $\epsilon$ & $\varphi$ & mean-field $q_\infty$ & sim $q_\infty$ (s.d.)
+ & service & cost gap \% & audit load\\
+\midrule
+0.30 & 0.00 & --  & 84.3 & 83.2 \,(0.02) & 0.287 & 0.1  & 0.000\\
+0.30 & 0.30 & 0.0 & 51.3 & 51.6 \,(0.61) & 0.053 & 45.7 & 0.000\\
+0.30 & 0.30 & 0.5 & 72.1 & 72.5 \,(0.65) & 0.180 & 7.1  & 0.122\\
+0.30 & 0.30 & 1.0 & 84.3 & 83.1 \,(0.04) & 0.287 & 0.1  & 0.212\\
+\midrule
+0.70 & 0.00 & --  & 115.7 & 114.2 (0.02) & 0.682 & 0.1  & 0.000\\
+0.70 & 0.30 & 0.0 & 105.4 & 104.2 (0.03) & 0.555 & 7.8  & 0.000\\
+0.70 & 0.30 & 0.5 & 111.3 & 110.1 (0.03) & 0.631 & 1.8  & 0.054\\
+0.70 & 0.30 & 1.0 & 115.7 & 114.3 (0.04) & 0.683 & 0.1  & 0.093\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+We simulate the estimate-then-optimize learner, which shares the mean field of the
+analyzed Robbins--Monro recursion by Lemma~\ref{lem:mf}. The Robbins--Monro learner
+of \eqref{eq:rm} converges to the same equilibria, matching the roots of
+\eqref{eq:fp} to within $0.2$ units across the cases below.
+
+The table confirms every part of Theorem~\ref{thm:main}. The unfiltered learner
+($\varphi=0$) starts well above the optimum and descends to the mean-field
+equilibrium to within about a unit, validating part~(i) and the absence of a
+tipping point. The damage is large and ranked by service level as part~(ii)
+predicts. The low-service item at $\beta=0.30$ loses almost all of its service and
+runs $46$ percent above optimal cost, while the high-service item at $\beta=0.70$
+loses far less. The filter validates part~(iii) and its convex recovery. Auditing
+half of the logged correction days removes more than three quarters of the cost
+penalty, from $45.7$ to $7.1$ percent at $\beta=0.30$ and from $7.8$ to $1.8$
+percent at $\beta=0.70$, and full coverage restores the optimum. The audit load
+shows the trade-off the manager faces. Because the alarm fires only on logged
+correction days, namely the masked stockouts themselves, full recovery requires
+reviewing about $\epsilon(1-F(q_\infty))$ of item-days, far less than the stockout
+rate the old stockout-triggered alarm would have implied, and half coverage already
+captures most of the value.
+
+\bibliography{references}
+
+\end{document}
